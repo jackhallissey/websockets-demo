@@ -32,5 +32,5 @@ def handle_disconnect():
     username = users.pop(request.sid, "Anonymous")
     emit("message", f"{username} left the chat", broadcast=True)
 
-if __name__ == '__main__':
-    socketio.run(app, debug=True)
+# if __name__ == '__main__':
+#     socketio.run(app, debug=True)
