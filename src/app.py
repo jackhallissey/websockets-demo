@@ -4,7 +4,9 @@ from flask_socketio import SocketIO, send, emit, join_room, leave_room
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-socketio = SocketIO(app)
+async_mode = None
+
+socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
 
 # Dictionary to store users and their assigned rooms
 users = {}
