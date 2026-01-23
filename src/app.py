@@ -46,6 +46,9 @@ rooms = {
     }
 }
 
+#Maps socket ID to room ID
+socket_rooms = {}
+
 @app.before_request
 def get_username():
     if "user" not in session:
@@ -61,13 +64,11 @@ def index():
 @app.route("/chat/<room_id>")
 def chat(room_id):
     room_id = int(room_id)
-    session["current_room"] = room_id
     room = rooms[room_id]
 
     # Assign a chatter ID based on the username, or on the session ID if not logged in
     chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
-    session.modified = True
     
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
@@ -75,11 +76,11 @@ def chat(room_id):
 
     return render_template("chat.html", room_id=room_id, messages=room["messages"])
 
-@socketio.on("connect")
-def handle_connect(*args):
-    chatter_id = session["chatter_id"]
-    room_id = session["current_room"]
+@socketio.on("join")
+def handle_join(room_id):
+    room_id = int(room_id)
     room = rooms[room_id]
+    chatter_id = session["chatter_id"]
     
     # Check if this chatter is already connected to this room, or was previously
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
@@ -101,6 +102,7 @@ def handle_connect(*args):
             "disconnect_time": None
         }
 
+    socket_rooms[request.sid] = room_id
     join_room(room_id)
           
 # Handle new user joining
@@ -144,7 +146,7 @@ def handle_disconnect(*args):
     t = time()
 
     chatter_id = session["chatter_id"]
-    room_id = session["current_room"]
+    room_id = socket_rooms[request.sid]
 
     chatter = rooms[room_id]["chatters"][chatter_id]
     chatter["socket_id"] = None
@@ -152,12 +154,14 @@ def handle_disconnect(*args):
 
     # In the game, the current game should be deleted when the last player disconnects
 
+    # Remove from socket_rooms?
+
 
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
     chatter_id = session["chatter_id"]
-    room_id = session["current_room"]
+    room_id = socket_rooms[request.sid]
     room = rooms[room_id]
 
     display_name = room["chatters"][chatter_id]["display_name"]
