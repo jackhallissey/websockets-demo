@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flask WebSocket Chat</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+        const roomID = "{{ room_id }}";
+        //const roomID = window.location.pathname.split("/")[-1];
+
+        const socket = io();
+        socket.emit("join", roomID);  // Notify server of new user
+
+        // Listen for messages from server
+        socket.on("message", function(data) {
+            let messages = document.getElementById("messages");
+            messages.innerHTML += `<p>${data}</p>`;
+        });
+
+        // Function to send messages
+        function sendMessage() {
+            let msgInput = document.getElementById("msg");
+            let message = msgInput.value;
+            socket.send(message);
+            msgInput.value = "";
+        }
+    </script>
+</head>
+<body>
+    <h2>Flask WebSocket Chat</h2>
+    <input id="msg" type="text" placeholder="Enter your message">
+    <button onclick="sendMessage()">Send</button>
+    <div id="messages">
+        {% for message in messages %}
+            <p>{{message[0]}}: {{message[1]}}</p>
+        {% endfor %}
+    </div>
+</body>
+</html>
