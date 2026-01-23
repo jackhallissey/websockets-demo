@@ -46,10 +46,6 @@ rooms = {
     }
 }
 
-# Maps each socket id to a pair of (room id, chatter id)
-socket_dict = {}
-
-
 @app.before_request
 def get_username():
     if "user" not in session:
@@ -65,29 +61,23 @@ def index():
 @app.route("/chat/<room_id>")
 def chat(room_id):
     room_id = int(room_id)
+    session["current_room"] = room_id
+    room = rooms[room_id]
 
     # Assign a chatter ID based on the username, or on the session ID if not logged in
     chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
-    room = rooms[room_id]
-
+    
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
         return "Already connected"
 
     return render_template("chat.html", room_id=room_id, messages=room["messages"])
 
-
 @socketio.on("connect")
 def handle_connect():
-    print
-
-# Handle new user joining
-@socketio.on("join")
-def handle_join(room_id):
-    room_id = int(room_id)
-
     chatter_id = session["chatter_id"]
+    room_id = session["current_room"]
     room = rooms[room_id]
     
     # Check if this chatter is already connected to this room, or was previously
@@ -110,9 +100,41 @@ def handle_join(room_id):
             "disconnect_time": None
         }
 
-    socket_dict[request.sid] = (room_id, chatter_id)
-
     join_room(room_id)
+          
+# Handle new user joining
+# @socketio.on("join")
+# def handle_join(room_id):
+#     print("Print test")
+
+#     room_id = int(room_id)
+
+#     chatter_id = session["chatter_id"]
+#     room = rooms[room_id]
+    
+#     # Check if this chatter is already connected to this room, or was previously
+#     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
+#         # If the same chatter is already connected to this room on another socket, refuse the connection
+#         # This shouldn't be possible given the checks in the chat page, but this is included to be safe
+#         disconnect(request.sid)
+#         return
+#     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
+#         # If the chatter disconnected within the last minute, allow them to reconnect
+#         # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
+#         room["chatters"][chatter_id]["socket_id"] = request.sid
+#         room["chatters"][chatter_id]["disconnect_time"] = None
+#     else:
+#         room["chatters"][chatter_id] = {
+#             "chatter_id": chatter_id,
+#             "socket_id": request.sid,
+#             "user": None,
+#             "display_name": "user" + str(randint(100, 999)),
+#             "disconnect_time": None
+#         }
+
+#     socket_dict[request.sid] = (room_id, chatter_id)
+
+#     join_room(room_id)
 
 
 # Handle disconnects
@@ -120,11 +142,8 @@ def handle_join(room_id):
 def handle_disconnect():
     t = time()
 
-    if request.sid not in socket_dict:
-        return
-    
-    # room_id, chatter_id = socket_dict.pop(request.sid)
-    room_id, chatter_id = socket_dict[request.sid]
+    chatter_id = session["chatter_id"]
+    room_id = session["current_room"]
 
     chatter = rooms[room_id]["chatters"][chatter_id]
     chatter["socket_id"] = None
@@ -136,7 +155,8 @@ def handle_disconnect():
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
-    room_id, chatter_id = socket_dict[request.sid]
+    chatter_id = session["chatter_id"]
+    room_id = session["current_room"]
     room = rooms[room_id]
 
     display_name = room["chatters"][chatter_id]["display_name"]

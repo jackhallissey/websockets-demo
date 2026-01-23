@@ -8,7 +8,7 @@
         const roomID = window.location.pathname.split("/").at(-1);
 
         const socket = io();
-        socket.emit("join", roomID);  // Notify server of new user
+        // socket.emit("join", roomID);  // Notify server of new user
 
         // Listen for messages from server
         socket.on("message", function(data) {
