@@ -75,7 +75,7 @@ def chat(room_id):
     return render_template("chat.html", room_id=room_id, messages=room["messages"])
 
 @socketio.on("connect")
-def handle_connect():
+def handle_connect(*args):
     chatter_id = session["chatter_id"]
     room_id = session["current_room"]
     room = rooms[room_id]
@@ -139,7 +139,7 @@ def handle_connect():
 
 # Handle disconnects
 @socketio.on("disconnect")
-def handle_disconnect():
+def handle_disconnect(*args):
     t = time()
 
     chatter_id = session["chatter_id"]
