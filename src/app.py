@@ -67,6 +67,7 @@ def chat(room_id):
     # Assign a chatter ID based on the username, or on the session ID if not logged in
     chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
+    session.modified = True
     
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
