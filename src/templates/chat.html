@@ -5,8 +5,7 @@
     <title>Flask WebSocket Chat</title>
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
-        const roomID = "{{ room_id }}";
-        //const roomID = window.location.pathname.split("/")[-1];
+        const roomID = window.location.pathname.split("/").at(-1);
 
         const socket = io();
         socket.emit("join", roomID);  // Notify server of new user

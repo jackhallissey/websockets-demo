@@ -14,6 +14,10 @@ Session(app)
 async_mode = None
 socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
 
+# In the game, we can use "games" and "players" instead of "rooms" and "chatters"
+
+
+# Some hardcoded rooms for the example
 rooms = {
     1: {
         "chatters": {
@@ -62,7 +66,7 @@ def index():
 def chat(room_id):
     room_id = int(room_id)
 
-    # Assign a chatter ID based on the username, or the session ID if not logged in
+    # Assign a chatter ID based on the username, or on the session ID if not logged in
     chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
     room = rooms[room_id]
@@ -74,7 +78,9 @@ def chat(room_id):
     return render_template("chat.html", room_id=room_id, messages=room["messages"])
 
 
-
+@socketio.on("connect")
+def handle_connect():
+    print
 
 # Handle new user joining
 @socketio.on("join")
@@ -91,7 +97,7 @@ def handle_join(room_id):
         disconnect(request.sid)
         return
     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
-        # If the chatter disconnected within the last minute (TBD), allow them to reconnect
+        # If the chatter disconnected within the last minute, allow them to reconnect
         # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
         room["chatters"][chatter_id]["socket_id"] = request.sid
         room["chatters"][chatter_id]["disconnect_time"] = None
@@ -117,13 +123,14 @@ def handle_disconnect():
     if request.sid not in socket_dict:
         return
     
-    room_id, chatter_id = socket_dict.pop(request.sid)
+    # room_id, chatter_id = socket_dict.pop(request.sid)
+    room_id, chatter_id = socket_dict[request.sid]
 
     chatter = rooms[room_id]["chatters"][chatter_id]
     chatter["socket_id"] = None
     chatter["disconnect_time"] = t
 
-    # In the game, the game should be deleted when the last chatter disconnects
+    # In the game, the current game should be deleted when the last player disconnects
 
 
 # Handle user messages
