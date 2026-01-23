@@ -21,7 +21,7 @@
         function sendMessage() {
             let msgInput = document.getElementById("msg");
             let message = msgInput.value;
-            socket.send(message);
+            socket.emit("chat_message", message);
             msgInput.value = "";
         }
     </script>

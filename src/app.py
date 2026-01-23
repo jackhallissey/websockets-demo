@@ -21,7 +21,7 @@ rooms = {
             #     "socket_id": -,       # Set to None if the chatter disconnects
             #     "user": -,            # None if not logged in
             #     "display_name": -,    # Same as user if logged in
-            #     "last_disconnect": -  # 
+            #     "disconnect_time": -  # 
             # }
         },
         "messages": [
@@ -62,16 +62,14 @@ def index():
 def chat(room_id):
     room_id = int(room_id)
 
-    # Generate a chatter ID based on the username, or the session ID if not logged in
-    # Need to ensure a username cannot match a guest ID
-    chatter_id = g.user if g.user is not None else "guest_" + session.sid
+    # Assign a chatter ID based on the username, or the session ID if not logged in
+    chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
     room = rooms[room_id]
 
     # If the same chatter is already connected to this room on another socket, refuse the connection
-    for c_id, chatter in room["chatters"].items():
-        if c_id == chatter_id and chatter["socket_id"] is not None:
-            return "Already connected"
+    if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
+        return "Already connected"
 
     return render_template("chat.html", room_id=room_id, messages=room["messages"])
 
@@ -79,37 +77,31 @@ def chat(room_id):
 
 
 # Handle new user joining
-@socketio.on('join')
+@socketio.on("join")
 def handle_join(room_id):
-    # Also handle reconnecting
     room_id = int(room_id)
 
     chatter_id = session["chatter_id"]
     room = rooms[room_id]
     
     # Check if this chatter is already connected to this room, or was previously
-    for c_id, chatter in room["chatters"].items():
-        if c_id == chatter_id:
-            if chatter["socket_id"] is not None:
-                # If the same chatter is already connected to this room on another socket, refuse the connection
-                # This shouldn't be possible, but this is included to be safe
-                disconnect(request.sid)
-                return
-            elif time() - chatter["last_disconnect"] < 60:
-                # If the chatter disconnected within the last minute (TBD), allow them to reconnect
-                room["chatters"][chatter_id]["socket_id"] = request.sid
-                room["chatters"][chatter_id]["last_disconnect"] = None
-            else:
-                del room["chatters"][chatter_id]
-            break
-
-    if chatter_id not in room["chatters"]:
+    if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
+        # If the same chatter is already connected to this room on another socket, refuse the connection
+        # This shouldn't be possible given the checks in the chat page, but this is included to be safe
+        disconnect(request.sid)
+        return
+    elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
+        # If the chatter disconnected within the last minute (TBD), allow them to reconnect
+        # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
+        room["chatters"][chatter_id]["socket_id"] = request.sid
+        room["chatters"][chatter_id]["disconnect_time"] = None
+    else:
         room["chatters"][chatter_id] = {
             "chatter_id": chatter_id,
             "socket_id": request.sid,
             "user": None,
             "display_name": "user" + str(randint(100, 999)),
-            "last_disconnect": None
+            "disconnect_time": None
         }
 
     socket_dict[request.sid] = (room_id, chatter_id)
@@ -118,7 +110,7 @@ def handle_join(room_id):
 
 
 # Handle disconnects
-@socketio.on('disconnect')
+@socketio.on("disconnect")
 def handle_disconnect():
     t = time()
 
@@ -129,19 +121,19 @@ def handle_disconnect():
 
     chatter = rooms[room_id]["chatters"][chatter_id]
     chatter["socket_id"] = None
-    chatter["last_disconnect"] = t
+    chatter["disconnect_time"] = t
 
-    # If the creation of rooms is allowed, the room should be deleted when the last chatter disconnects
+    # In the game, the game should be deleted when the last chatter disconnects
 
 
 # Handle user messages
-@socketio.on('message')
-def handle_message(data):
+@socketio.on("chat_message")
+def handle_chat_message(message):
     room_id, chatter_id = socket_dict[request.sid]
     room = rooms[room_id]
 
     display_name = room["chatters"][chatter_id]["display_name"]
 
-    room["messages"].append((display_name, data))
+    room["messages"].append((display_name, message))
 
-    send("%s: %s" % (display_name, data), to=room_id)
+    send("%s: %s" % (display_name, message), to=room_id)
