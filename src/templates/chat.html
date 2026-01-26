@@ -10,13 +10,12 @@
         const socket = io();
 
         socket.on("connect", () => {
-            alert("Connect handler");
             socket.emit("join", roomID);
         })
 
-        socket.on("disconnect", () => {
-            alert("Disconnect handler");
-        })
+        // socket.on("disconnect", () => {
+        //     alert("Disconnect handler");
+        // })
 
         socket.on("message", (data) => {
             let messages = document.getElementById("messages");

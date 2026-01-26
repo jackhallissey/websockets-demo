@@ -17,8 +17,12 @@ async_mode = None
 socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
 
 def log(message):
+    # Logs a message to stderr with a timestamp
+    # This is useful when running on the PythonAnywhere server
     t = datetime.strftime(datetime.now(), "\n[%Y-%m-%d %H-%M-%S]")
     print(t, message, file=stderr)
+
+
 
 # In the game, we can use "games" and "players" instead of "rooms" and "chatters"
 
@@ -75,10 +79,6 @@ def chat(room_id):
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
 
-    # Assign a chatter ID based on the username, or on the session ID if not logged in
-    # chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
-    # session["chatter_id"] = chatter_id
-    
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
         return "Already connected"
@@ -87,7 +87,6 @@ def chat(room_id):
 
 @socketio.on("join")
 def handle_join(room_id):
-    log("Hello from join handler")
     room_id = int(room_id)
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
@@ -97,12 +96,7 @@ def handle_join(room_id):
         # If the same chatter is already connected to this room on another socket, disconnect the previous socket
         # This will typically occur if a client disconnects suddenly and tries to reconnect
         # (Time limit???)
-
-        log("Join handler: Disconnecting previous socket")
-
         prev_socket = room["chatters"][chatter_id]["socket_id"]
-        log("Socket IDs are the same: %s" % (request.sid == room["chatters"][chatter_id]["socket_id"]))
-
         room["chatters"][chatter_id]["socket_id"] = request.sid
         room["chatters"][chatter_id]["disconnect_time"] = None
         del socket_rooms[prev_socket]
@@ -125,49 +119,16 @@ def handle_join(room_id):
 
     socket_rooms[request.sid] = room_id
     join_room(room_id)
-          
-# Handle new user joining
-# @socketio.on("join")
-# def handle_join(room_id):
-#     room_id = int(room_id)
-
-#     chatter_id = session["chatter_id"]
-#     room = rooms[room_id]
-    
-#     # Check if this chatter is already connected to this room, or was previously
-#     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
-#         # If the same chatter is already connected to this room on another socket, refuse the connection
-#         # This shouldn't be possible given the checks in the chat page, but this is included to be safe
-#         disconnect(request.sid)
-#         return
-#     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
-#         # If the chatter disconnected within the last minute, allow them to reconnect
-#         # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
-#         room["chatters"][chatter_id]["socket_id"] = request.sid
-#         room["chatters"][chatter_id]["disconnect_time"] = None
-#     else:
-#         room["chatters"][chatter_id] = {
-#             "chatter_id": chatter_id,
-#             "socket_id": request.sid,
-#             "user": None,
-#             "display_name": "user" + str(randint(100, 999)),
-#             "disconnect_time": None
-#         }
-
-#     socket_dict[request.sid] = (room_id, chatter_id)
-
-#     join_room(room_id)
-
 
 # Handle disconnects
 @socketio.on("disconnect")
 def handle_disconnect(*args):
-    log("Hello from disconnect handler")
-
     t = time()
 
     if request.sid not in socket_rooms:
-        log("Disconnect handler: socket not in dict")
+        # If this socket is not in the dictionary, do nothing
+        # This should only occur if the socket was disconnected because the chatter connected to the room on a new socket
+        # (typically reconnecting after being suddenly disconnected)
         return
 
     room_id = socket_rooms.pop(request.sid)
@@ -179,14 +140,10 @@ def handle_disconnect(*args):
 
     # In the game, the current game should be deleted when the last player disconnects
 
-    # Remove from socket_rooms?
-
 
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
-    log("Hello from message handler")
-
     chatter_id = session["chatter_id"]
     room_id = socket_rooms[request.sid]
     room = rooms[room_id]
