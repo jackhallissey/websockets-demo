@@ -51,17 +51,13 @@ socket_rooms = {}
 
 @app.before_request
 def get_username():
-    if "user" in session:
-        g.user = session["user"]
-    else:
-        session["user"] = None      # Need to store something in session to ensure a session ID is created
-        g.user = None
-
-
-    # if g.user is None:
-    #     session["chatter_id"] = "guest_" + session.sid
-    # else:
-    #     session["chatter_id"] = "user_" + g.user
+    g.user = session.get("user", None)
+    if "chatter_id" not in session:
+        #Must be changed when logging in
+        if g.user is None:
+            session["chatter_id"] = "guest_" + session.sid
+        else:
+            session["chatter_id"] = "user_" + g.user
 
 @app.route('/')
 def index():
@@ -71,10 +67,11 @@ def index():
 def chat(room_id):
     room_id = int(room_id)
     room = rooms[room_id]
+    chatter_id = session["chatter_id"]
 
     # Assign a chatter ID based on the username, or on the session ID if not logged in
-    chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
-    session["chatter_id"] = chatter_id
+    # chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
+    # session["chatter_id"] = chatter_id
     
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
@@ -84,6 +81,7 @@ def chat(room_id):
 
 @socketio.on("join")
 def handle_join(room_id):
+    print("Hello from join handler")
     room_id = int(room_id)
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
@@ -150,10 +148,16 @@ def handle_join(room_id):
 # Handle disconnects
 @socketio.on("disconnect")
 def handle_disconnect(*args):
+    print("Hello from disconnect handler")
+
     t = time()
 
+    if request.sid not in socket_rooms:
+        print("Disconnect handler: socket not in dict")
+        return
+
+    room_id = socket_rooms.pop(request.sid)
     chatter_id = session["chatter_id"]
-    room_id = socket_rooms[request.sid]
 
     chatter = rooms[room_id]["chatters"][chatter_id]
     chatter["socket_id"] = None
@@ -167,6 +171,8 @@ def handle_disconnect(*args):
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
+    print("Hello from message handler")
+
     chatter_id = session["chatter_id"]
     room_id = socket_rooms[request.sid]
     room = rooms[room_id]
