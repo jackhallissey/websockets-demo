@@ -17,7 +17,7 @@ async_mode = None
 socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
 
 def log(message):
-    t = datetime.strftime(datetime.now(), "[%Y-%m-%d %H-%M-%S]")
+    t = datetime.strftime(datetime.now(), "\n[%Y-%m-%d %H-%M-%S]")
     print(t, message, file=stderr)
 
 # In the game, we can use "games" and "players" instead of "rooms" and "chatters"
@@ -94,16 +94,26 @@ def handle_join(room_id):
     
     # Check if this chatter is already connected to this room, or was previously
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
-        # If the same chatter is already connected to this room on another socket, refuse the connection
-        # This shouldn't be possible given the checks in the chat page, but this is included to be safe
-        log("Connection refused in join handler")
-        disconnect(request.sid)
-        return
+        # If the same chatter is already connected to this room on another socket, disconnect the previous socket
+        # This will typically occur if a client disconnects suddenly and tries to reconnect
+        # (Time limit???)
+
+        log("Join handler: Disconnecting previous socket")
+
+        prev_socket = room["chatters"][chatter_id]["socket_id"]
+        log("Socket IDs are the same: %s" % (request.sid == room["chatters"][chatter_id]["socket_id"]))
+
+        room["chatters"][chatter_id]["socket_id"] = request.sid
+        room["chatters"][chatter_id]["disconnect_time"] = None
+        del socket_rooms[prev_socket]
+        disconnect(prev_socket)
+
     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
         # If the chatter disconnected within the last minute, allow them to reconnect
         # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
         room["chatters"][chatter_id]["socket_id"] = request.sid
         room["chatters"][chatter_id]["disconnect_time"] = None
+
     else:
         room["chatters"][chatter_id] = {
             "chatter_id": chatter_id,
