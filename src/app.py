@@ -51,11 +51,17 @@ socket_rooms = {}
 
 @app.before_request
 def get_username():
-    if "user" not in session:
-        session["user"] = None          # Need to store something in session to ensure a session ID is created
-        g.user = None
-    else:
+    if "user" in session:
         g.user = session["user"]
+    else:
+        session["user"] = None      # Need to store something in session to ensure a session ID is created
+        g.user = None
+
+
+    # if g.user is None:
+    #     session["chatter_id"] = "guest_" + session.sid
+    # else:
+    #     session["chatter_id"] = "user_" + g.user
 
 @app.route('/')
 def index():
@@ -86,6 +92,7 @@ def handle_join(room_id):
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
         # If the same chatter is already connected to this room on another socket, refuse the connection
         # This shouldn't be possible given the checks in the chat page, but this is included to be safe
+        print("Connection refused in join handler")
         disconnect(request.sid)
         return
     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
