@@ -3,6 +3,7 @@ from flask_socketio import SocketIO, send, emit, join_room, leave_room, disconne
 from flask_session import Session
 from random import randint
 from time import time
+from datetime import datetime
 from sys import stderr
 
 app = Flask(__name__)
@@ -14,6 +15,10 @@ Session(app)
 
 async_mode = None
 socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
+
+def log(message):
+    t = datetime.strftime(datetime.now(), "[%Y-%m-%d %H-%M-%S]")
+    print(t, message, file=stderr)
 
 # In the game, we can use "games" and "players" instead of "rooms" and "chatters"
 
@@ -82,7 +87,7 @@ def chat(room_id):
 
 @socketio.on("join")
 def handle_join(room_id):
-    print("Hello from join handler", file=stderr)
+    log("Hello from join handler")
     room_id = int(room_id)
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
@@ -91,7 +96,7 @@ def handle_join(room_id):
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
         # If the same chatter is already connected to this room on another socket, refuse the connection
         # This shouldn't be possible given the checks in the chat page, but this is included to be safe
-        print("Connection refused in join handler", file=stderr)
+        log("Connection refused in join handler")
         disconnect(request.sid)
         return
     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
@@ -147,12 +152,12 @@ def handle_join(room_id):
 # Handle disconnects
 @socketio.on("disconnect")
 def handle_disconnect(*args):
-    print("Hello from disconnect handler", file=stderr)
+    log("Hello from disconnect handler")
 
     t = time()
 
     if request.sid not in socket_rooms:
-        print("Disconnect handler: socket not in dict", file=stderr)
+        log("Disconnect handler: socket not in dict")
         return
 
     room_id = socket_rooms.pop(request.sid)
@@ -170,7 +175,7 @@ def handle_disconnect(*args):
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
-    print("Hello from message handler", file=stderr)
+    log("Hello from message handler")
 
     chatter_id = session["chatter_id"]
     room_id = socket_rooms[request.sid]
