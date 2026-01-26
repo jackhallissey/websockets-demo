@@ -3,6 +3,7 @@ from flask_socketio import SocketIO, send, emit, join_room, leave_room, disconne
 from flask_session import Session
 from random import randint
 from time import time
+from sys import stderr
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -81,7 +82,7 @@ def chat(room_id):
 
 @socketio.on("join")
 def handle_join(room_id):
-    print("Hello from join handler")
+    print("Hello from join handler", file=stderr)
     room_id = int(room_id)
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
@@ -90,7 +91,7 @@ def handle_join(room_id):
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
         # If the same chatter is already connected to this room on another socket, refuse the connection
         # This shouldn't be possible given the checks in the chat page, but this is included to be safe
-        print("Connection refused in join handler")
+        print("Connection refused in join handler", file=stderr)
         disconnect(request.sid)
         return
     elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
@@ -113,8 +114,6 @@ def handle_join(room_id):
 # Handle new user joining
 # @socketio.on("join")
 # def handle_join(room_id):
-#     print("Print test")
-
 #     room_id = int(room_id)
 
 #     chatter_id = session["chatter_id"]
@@ -148,12 +147,12 @@ def handle_join(room_id):
 # Handle disconnects
 @socketio.on("disconnect")
 def handle_disconnect(*args):
-    print("Hello from disconnect handler")
+    print("Hello from disconnect handler", file=stderr)
 
     t = time()
 
     if request.sid not in socket_rooms:
-        print("Disconnect handler: socket not in dict")
+        print("Disconnect handler: socket not in dict", file=stderr)
         return
 
     room_id = socket_rooms.pop(request.sid)
@@ -171,7 +170,7 @@ def handle_disconnect(*args):
 # Handle user messages
 @socketio.on("chat_message")
 def handle_chat_message(message):
-    print("Hello from message handler")
+    print("Hello from message handler", file=stderr)
 
     chatter_id = session["chatter_id"]
     room_id = socket_rooms[request.sid]
