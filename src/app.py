@@ -6,6 +6,7 @@ from time import time
 from datetime import datetime
 from sys import stderr
 from gevent import monkey
+from gevent.lock import BoundedSemaphore
 
 monkey.patch_all()
 
@@ -24,12 +25,14 @@ def log(message):
     t = datetime.strftime(datetime.now(), "\n[%Y-%m-%d %H-%M-%S]")
     print(t, message, file=stderr)
 
+# Semaphores are used here to prevent concurrency issued with shared data structures, like the rooms dictionary
 
 
 # In the game, we can use "players" instead of "chatters"
 
-
 # Some hardcoded rooms for the example
+# These could be converted to instances of a custom Room class instead of dictionaries
+
 rooms = {
     1: {
         "chatters": {
@@ -42,24 +45,31 @@ rooms = {
         },
         "messages": [
             ("System", "Welcome to Room 1")
-        ]
+        ],
+        "lock": BoundedSemaphore()
     },
     2: {
         "chatters": {},
         "messages": [
             ("System", "Welcome to Room 2")
-        ]
+        ],
+        "lock": BoundedSemaphore()
     },
     3: {
         "chatters": {},
         "messages": [
             ("System", "Welcome to Room 3")
-        ]
+        ],
+        "lock": BoundedSemaphore()
     }
 }
 
+# Should be locked when modifying the room dict, e.g. creating/removing rooms
+rooms_lock = BoundedSemaphore()
+
 #Maps socket ID to room ID
 socket_rooms = {}
+socket_rooms_lock = BoundedSemaphore()
 
 @app.before_request
 def get_username():
@@ -75,17 +85,13 @@ def get_username():
 
 @app.route('/')
 def index():
-    log("Async mode: %s" % socketio.async_mode)
     return render_template('index.html', rooms=rooms)
 
 @app.route("/chat/<room_id>")
 def chat(room_id):
     room_id = int(room_id)
     room = rooms[room_id]
-
-    
-    chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
-    session["chatter_id"] = chatter_id
+    chatter_id = session["chatter_id"]
 
     # If the same chatter is already connected to this room on another socket, refuse the connection
     if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
@@ -98,34 +104,43 @@ def handle_join(room_id):
     room_id = int(room_id)
     room = rooms[room_id]
     chatter_id = session["chatter_id"]
-    
+
+    prev_socket = None
+
     # Check if this chatter is already connected to this room, or was previously
-    if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
-        # If the same chatter is already connected to this room on another socket, disconnect the previous socket
-        # This will typically occur if a client disconnects suddenly and tries to reconnect
-        # (Time limit???)
-        prev_socket = room["chatters"][chatter_id]["socket_id"]
-        room["chatters"][chatter_id]["socket_id"] = request.sid
-        room["chatters"][chatter_id]["disconnect_time"] = None
-        del socket_rooms[prev_socket]
+    with room["lock"]:
+        if chatter_id in room["chatters"] and room["chatters"][chatter_id]["socket_id"] is not None:
+            # If the same chatter is already connected to this room on another socket, disconnect the previous socket
+            # This will typically occur if a client disconnects suddenly and tries to reconnect
+            # (Time limit???)
+            prev_socket = room["chatters"][chatter_id]["socket_id"]
+            room["chatters"][chatter_id]["socket_id"] = request.sid
+            room["chatters"][chatter_id]["disconnect_time"] = None
+
+            with socket_rooms_lock:
+                del socket_rooms[prev_socket]
+
+        elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
+            # If the chatter disconnected within the last minute, allow them to reconnect
+            # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
+            room["chatters"][chatter_id]["socket_id"] = request.sid
+            room["chatters"][chatter_id]["disconnect_time"] = None
+
+        else:
+            room["chatters"][chatter_id] = {
+                "chatter_id": chatter_id,
+                "socket_id": request.sid,
+                "user": None,
+                "display_name": "user" + str(randint(100, 999)),
+                "disconnect_time": None
+            }
+
+    if prev_socket is not None:
         disconnect(prev_socket)
 
-    elif chatter_id in room["chatters"] and time() - room["chatters"][chatter_id]["disconnect_time"] < 60:
-        # If the chatter disconnected within the last minute, allow them to reconnect
-        # This reconnect feature doesn't really have much point here, it's more to test if something like this will work for the game
-        room["chatters"][chatter_id]["socket_id"] = request.sid
-        room["chatters"][chatter_id]["disconnect_time"] = None
+    with socket_rooms_lock:
+        socket_rooms[request.sid] = room_id
 
-    else:
-        room["chatters"][chatter_id] = {
-            "chatter_id": chatter_id,
-            "socket_id": request.sid,
-            "user": None,
-            "display_name": "user" + str(randint(100, 999)),
-            "disconnect_time": None
-        }
-
-    socket_rooms[request.sid] = room_id
     join_room(room_id)
 
 # Handle disconnects
@@ -133,18 +148,22 @@ def handle_join(room_id):
 def handle_disconnect(*args):
     t = time()
 
-    if request.sid not in socket_rooms:
+    with socket_rooms_lock:
+        room_id = socket_rooms.pop(request.sid, None)
+
+    if room_id is None:
         # If this socket is not in the dictionary, do nothing
         # This should only occur if the socket was disconnected because the chatter connected to the room on a new socket
         # (typically reconnecting after being suddenly disconnected)
         return
 
-    room_id = socket_rooms.pop(request.sid)
     chatter_id = session["chatter_id"]
+    room = rooms[room_id]
 
-    chatter = rooms[room_id]["chatters"][chatter_id]
-    chatter["socket_id"] = None
-    chatter["disconnect_time"] = t
+    with room["lock"]:
+        chatter = room["chatters"][chatter_id]
+        chatter["socket_id"] = None
+        chatter["disconnect_time"] = t
 
     # In the game, the current game should be deleted when the last player disconnects
 
@@ -157,7 +176,8 @@ def handle_chat_message(message):
 
     display_name = room["chatters"][chatter_id]["display_name"]
 
-    room["messages"].append((display_name, message))
+    with room["lock"]:
+        room["messages"].append((display_name, message))
 
     send("%s: %s" % (display_name, message), to=room_id)
 
