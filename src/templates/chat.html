@@ -11,11 +11,14 @@
 
         socket.on("connect", () => {
             socket.emit("join", roomID);
+            document.getElementById("btn").disabled = false;
+            document.getElementById("status").innerHTML = "Connected";
         })
 
-        // socket.on("disconnect", () => {
-        //     
-        // })
+        socket.on("disconnect", () => {
+            document.getElementById("btn").disabled = true;
+            document.getElementById("status").innerHTML = "Disconnected";
+        })
 
         socket.on("message", (data) => {
             let messages = document.getElementById("messages");
@@ -33,7 +36,10 @@
 <body>
     <h2>Flask WebSocket Chat</h2>
     <input id="msg" type="text" placeholder="Enter your message">
-    <button onclick="sendMessage()">Send</button>
+    <button id="btn" onclick="sendMessage()" disabled>Send</button>
+
+    <p id="status">Disconnected</p>
+
     <div id="messages">
         {% for message in messages %}
             <p>{{message[0]}}: {{message[1]}}</p>
