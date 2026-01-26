@@ -75,7 +75,7 @@ def get_username():
 
 @app.route('/')
 def index():
-    log("Async mode", socketio.async_mode)
+    log("Async mode: %s" % socketio.async_mode)
     return render_template('index.html', rooms=rooms)
 
 @app.route("/chat/<room_id>")
