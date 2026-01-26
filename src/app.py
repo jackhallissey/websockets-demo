@@ -5,6 +5,9 @@ from random import randint
 from time import time
 from datetime import datetime
 from sys import stderr
+from gevent import monkey
+
+monkey.patch_all()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -13,8 +16,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-async_mode = None
-socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins="*")
 
 def log(message):
     # Logs a message to stderr with a timestamp
@@ -24,7 +26,7 @@ def log(message):
 
 
 
-# In the game, we can use "games" and "players" instead of "rooms" and "chatters"
+# In the game, we can use "players" instead of "chatters"
 
 
 # Some hardcoded rooms for the example
@@ -61,14 +63,19 @@ socket_rooms = {}
 
 @app.before_request
 def get_username():
-    if "user" in session:
-        g.user = session["user"]
-    else:
-        session["user"] = None          #Need to store something in session to ensure a session ID is created
-        g.user = None
+    g.user = session.get("user", None)
+
+    # Assign a chatter ID based on the username, or on the session ID if not logged in
+    if "chatter_id" not in session:
+        # Change when logging in
+        if g.user is None:
+            session["chatter_id"] = "guest_" + session.sid
+        else:
+            session["chatter_id"] = "user_" + g.user
 
 @app.route('/')
 def index():
+    log("Async mode", socketio.async_mode)
     return render_template('index.html', rooms=rooms)
 
 @app.route("/chat/<room_id>")
@@ -76,7 +83,7 @@ def chat(room_id):
     room_id = int(room_id)
     room = rooms[room_id]
 
-    # Assign a chatter ID based on the username, or on the session ID if not logged in
+    
     chatter_id = "user_" + g.user if g.user is not None else "guest_" + session.sid
     session["chatter_id"] = chatter_id
 
@@ -153,3 +160,6 @@ def handle_chat_message(message):
     room["messages"].append((display_name, message))
 
     send("%s: %s" % (display_name, message), to=room_id)
+
+if __name__ == "__main__":
+    socketio.run(app, host="127.0.0.1", port=5000, debug=True)
