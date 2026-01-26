@@ -7,8 +7,12 @@
 <body>
     <h2>Rooms</h2>
 
-    {% for room in rooms %}
-        <a href="{{ url_for('chat', room_id=room) }}">{{ room }}</a>
-    {% endfor %}
+    <ul>
+        {% for room in rooms %}
+            <li>
+                <a href="{{ url_for('chat', room_id=room) }}">Room {{ room }}</a>
+            </li>
+        {% endfor %}
+    </ul>
 </body>
 </html>
