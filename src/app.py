@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 from flask import Flask, render_template, request, session, g
 from flask_socketio import SocketIO, send, emit, join_room, leave_room, disconnect
 from flask_session import Session
@@ -5,10 +8,7 @@ from random import randint
 from time import time
 from datetime import datetime
 from sys import stderr
-from gevent import monkey
 from gevent.lock import BoundedSemaphore
-
-monkey.patch_all()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -17,7 +17,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 def log(message):
     # Logs a message to stderr with a timestamp
