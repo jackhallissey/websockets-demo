@@ -17,7 +17,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins="*", logger=True, engineio_logger=True)
+socketio = SocketIO(app, async_mode=None, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 def log(message):
     # Logs a message to stderr with a timestamp
@@ -85,6 +85,7 @@ def get_username():
 
 @app.route('/')
 def index():
+    log("Async mode:", socketio.async_mode)
     return render_template('index.html', rooms=rooms)
 
 @app.route("/chat/<room_id>")
